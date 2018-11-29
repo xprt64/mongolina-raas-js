@@ -1,0 +1,14 @@
+{
+  "name": "mongolina-raas-js",
+  "version": "0.0.3",
+  "description": "ReadModel As A Service",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Constantin Galbenu <xprt64@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "mongolina": "0.0.10"
+  }
+}
