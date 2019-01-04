@@ -17,7 +17,7 @@ async function runManaged(readModel) {
         tailing = true;
         const response = await tellWeCatchedUp();
         console.log(response);
-        console.log(`running managed ${readModel.constructor.name}`);
+        console.log(`running managed readmodel ${readModel.constructor.name}`);
     } catch (e) {
         console.error(e);
         process.exit(1);

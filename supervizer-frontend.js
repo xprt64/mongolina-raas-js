@@ -2,7 +2,7 @@ var http = require('http');
 var express = require('express');
 
 var app = express();
-var port = normalizePort(process.env.PORT || '80');
+var port = process.env.PORT || '80';
 
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
@@ -28,6 +28,6 @@ module.exports.init = async function(onDelete, areWeTailingEvents) {
     app.use('/', router);
     var server = http.createServer(app);
     server.on('error', (error) => console.log(error));
-    server.on('listening', () => console.log(`listening on port ${port}`));
+    server.on('listening', () => console.log(`supervizer-frontend listening on port ${port}`));
     server.listen(port);
 };
