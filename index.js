@@ -2,82 +2,71 @@
  * Copyright (c) 2018. Constantin Galbenu <xprt64@gmail.com> Toate drepturile rezervate. All rights reserved.
  */
 const fs = require("fs");
+const namespace = process.env.NAMESPACE;
 const {connectMultipleEventLogs, connectMultipleEventStores} = require('mongolina');
-const {dbNameFromUrlString} = require('mongolina');
 const {connect} = require('./mongo');
-const eventSources = require('/eventSources.json');
+const {attachToReadModelAndCatchUp} = require('./event-sources');
+const {tellWeCatchedUp} = require('./supervizer-api');
+const frontendInit = require('./supervizer-frontend').init;
 
-module.exports.runManaged = async function main(readModel) {
+async function runManaged(readModel) {
+    try {
+        let tailing = false;
+        await frontendInit( () => readModel.clear(), () => tailing );
+        await __runManaged(readModel);
+        tailing = true;
+        const response = await tellWeCatchedUp();
+        console.log(response);
+        console.log(`running managed ${readModel.constructor.name}`);
+    } catch (e) {
+        console.error(e);
+        process.exit(1);
+    }
+}
+
+async function __runManaged(readModel) {
     const options = {};
     if (readModel.needsDatabase()) {
-        options.getDatabase = async () => await connect(process.env.PERSISTENCE_DSN).db(factoryNameWithVersion(readModel))
+        if (!process.env.PERSISTENCE_SERVER) {
+            throw "process.env.PERSISTENCE_SERVER is missing";
+        }
+        let db = factoryReadmodelNameWithVersion(readModel);
+        console.log(`using managed database ${process.env.PERSISTENCE_SERVER}`);
+        options.getDatabase = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + db))
+            .db(db)
     }
     if (readModel.needsCollection()) {
-        options.getCollection = async () => (await connect(process.env.PERSISTENCE_DSN)).db(dbNameFromUrlString(process.env.PERSISTENCE_DSN)).collection(process.env.COLLECTION || factoryNameWithVersion(readModel))
+        if (!process.env.PERSISTENCE_SERVER) {
+            throw "process.env.PERSISTENCE_SERVER is missing";
+        }
+        if (!process.env.PERSISTENCE_DATABASE) {
+            throw "process.env.PERSISTENCE_DATABASE is missing";
+        }
+        const collection = factoryNameWithVersion(process.env.PERSISTENCE_COLLECTION || readModel.constructor.name);
+        console.log(`using managed collection ${process.env.PERSISTENCE_SERVER}/${process.env.PERSISTENCE_DATABASE}/${collection}`);
+        options.getCollection = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + process.env.PERSISTENCE_DATABASE))
+            .db(process.env.PERSISTENCE_DATABASE)
+            .collection(collection)
     }
     await readModel.init(options);
     if (process.env.REBUILD === '1') {
         await readModel.clear();
     }
-    return run(readModel);
-};
+    await attachToReadModelAndCatchUp(readModel);
+ }
 
-async function run(readModel) {
-    readModel.continueToRunAfterInitialProcessing();
+module.exports.runManaged = runManaged;
 
-    const eventSources = getRelevantEventSourcesFromReadModel(readModel);
-    const eventStores = getEventStores(eventSources);
-    const eventLogs = getEventLogs(eventSources);
-
-    const eventStoreConnections = await connectMultipleEventStores(eventStores.map(eventStore => {
-        const dsn = fs.readFileSync(`/run/secrets/${eventStore.name}`);
-        return {
-            connectUrl: `${dsn}/${eventStore.database}`,
-            oplogUrl: `${dsn}/local`,
-            collectionName: eventStore.collection,
-            name: `${eventStore.database}/${eventStore.collection}`
-        }
-    }));
-
-    const eventLogConnections = await connectMultipleEventLogs(eventLogs.map(eventStore => {
-        const dsn = fs.readFileSync(`/run/secrets/${eventStore.name}`);
-        return {
-            connectUrl: `${dsn}/${eventStore.database}`,
-            oplogUrl: `${dsn}/local`,
-            collectionName: eventStore.collection,
-            name: `${eventStore.database}/${eventStore.collection}`
-        }
-    }));
-
-    const connections = eventStoreConnections.concat(eventLogConnections);
-
-    connections.forEach(eventSource => {
-        console.log(`subscribing to`, eventSource.name);
-        eventSource
-            .subscribeReadModel(readModel)
-            .run();
-    })
+function factoryReadmodelNameWithVersion(readModel) {
+    return factoryNameWithVersion(readModel.constructor.name);
 }
 
-module.exports.run = run;
-
-function getRelevantEventSourcesFromReadModel(readModel) {
-    const eventTypes = readModel.getEventTypes();
-    return eventSources.filter((eventSource) => arrayIntersects(eventSource.eventTypes, eventTypes));
+function factoryNameWithVersion(name) {
+    return `${name}_${process.env.VERSION.replace(/\./g, '_')}_${process.env.BUILD}`;
 }
 
-function getEventStores(eventSources) {
-    return eventSources.filter((eventSource) => eventSource.type === "MongoEventStore");
-}
-
-function getEventLogs(eventSources) {
-    return eventSources.filter((eventSource) => eventSource.type === "MongoEventLog");
-}
-
-function arrayIntersects(array1, array2) {
-    return array1.filter(value => -1 !== array2.indexOf(value)).length > 0;
-}
-
-function factoryNameWithVersion(readModel) {
-    return `${readModel.constructor.name}-${process.env.VERSION || '0_0_1'}`;
+function getDsn(serverName) {
+    let secret = fs.readFileSync(`/run/secrets/db-${serverName}`);
+    console.log('secret', serverName, `${secret}`)
+    return `${secret}`.match(/^mongodb:\/\//) ? secret : `mongodb://${secret}`;
 }

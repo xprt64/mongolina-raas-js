@@ -1,6 +1,6 @@
 {
   "name": "mongolina-raas-js",
-  "version": "0.0.3",
+  "version": "0.0.13",
   "description": "ReadModel As A Service",
   "main": "index.js",
   "scripts": {
@@ -9,6 +9,9 @@
   "author": "Constantin Galbenu <xprt64@gmail.com>",
   "license": "ISC",
   "dependencies": {
-    "mongolina": "0.0.10"
+    "request": "^2.88.0",
+    "request-promise": "^4.2.2",
+    "mongolina": "0.0.23",
+    "express": "^4.16.4"
   }
 }

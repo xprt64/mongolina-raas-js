@@ -46,7 +46,8 @@ module.exports.connect = function(dsn) {
     return new Promise((resolve, reject) => {
         const client = new MongoClient(dsn, {
             reconnectTries: 30,
-            reconnectInterval: 1000
+            reconnectInterval: 1000,
+            useNewUrlParser: true
         });
         client.connect(function (err, client) {
             if (err) {
