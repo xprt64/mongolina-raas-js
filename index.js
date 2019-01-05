@@ -10,63 +10,70 @@ const {tellWeCatchedUp} = require('./supervizer-api');
 const frontendInit = require('./supervizer-frontend').init;
 
 async function runManaged(readModel) {
-    try {
-        let tailing = false;
-        await frontendInit( () => readModel.clear(), () => tailing );
-        await __runManaged(readModel);
-        tailing = true;
-        const response = await tellWeCatchedUp();
-        console.log(response);
-        console.log(`running managed readmodel ${readModel.constructor.name}`);
-    } catch (e) {
-        console.error(e);
-        process.exit(1);
-    }
+	try {
+		let tailing = false;
+		let cleared = false;
+		await frontendInit(async () => {
+			cleared = true;
+			return await readModel.clear()
+		}, () => tailing);
+		if (cleared) {
+			return;
+		}
+		await __runManaged(readModel, () => cleared);
+		tailing = true;
+		const response = await tellWeCatchedUp();
+		console.log(response);
+		console.log(`running managed readmodel ${readModel.constructor.name}`);
+	} catch (e) {
+		console.error(e);
+		process.exit(1);
+	}
 }
 
-async function __runManaged(readModel) {
-    const options = {};
-    if (readModel.needsDatabase()) {
-        if (!process.env.PERSISTENCE_SERVER) {
-            throw "process.env.PERSISTENCE_SERVER is missing";
-        }
-        let db = factoryReadmodelNameWithVersion(readModel);
-        console.log(`using managed database ${process.env.PERSISTENCE_SERVER}`);
-        options.getDatabase = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + db))
-            .db(db)
-    }
-    if (readModel.needsCollection()) {
-        if (!process.env.PERSISTENCE_SERVER) {
-            throw "process.env.PERSISTENCE_SERVER is missing";
-        }
-        if (!process.env.PERSISTENCE_DATABASE) {
-            throw "process.env.PERSISTENCE_DATABASE is missing";
-        }
-        const collection = factoryNameWithVersion(process.env.PERSISTENCE_COLLECTION || readModel.constructor.name);
-        console.log(`using managed collection ${process.env.PERSISTENCE_SERVER}/${process.env.PERSISTENCE_DATABASE}/${collection}`);
-        options.getCollection = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + process.env.PERSISTENCE_DATABASE))
-            .db(process.env.PERSISTENCE_DATABASE)
-            .collection(collection)
-    }
-    await readModel.init(options);
-    if (process.env.REBUILD === '1') {
-        await readModel.clear();
-    }
-    await attachToReadModelAndCatchUp(readModel);
- }
+async function __runManaged(readModel, shouldAbort) {
+	const options = {};
+	if (readModel.needsDatabase()) {
+		if (!process.env.PERSISTENCE_SERVER) {
+			throw "process.env.PERSISTENCE_SERVER is missing";
+		}
+		let db = factoryReadmodelNameWithVersion(readModel);
+		console.log(`using managed database ${process.env.PERSISTENCE_SERVER}`);
+		options.getDatabase = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + db))
+			.db(db)
+	}
+	if (readModel.needsCollection()) {
+		if (!process.env.PERSISTENCE_SERVER) {
+			throw "process.env.PERSISTENCE_SERVER is missing";
+		}
+		if (!process.env.PERSISTENCE_DATABASE) {
+			throw "process.env.PERSISTENCE_DATABASE is missing";
+		}
+		const collection = factoryNameWithVersion(process.env.PERSISTENCE_COLLECTION || readModel.constructor.name);
+		console.log(`using managed collection ${process.env.PERSISTENCE_SERVER}/${process.env.PERSISTENCE_DATABASE}/${collection}`);
+		options.getCollection = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + process.env.PERSISTENCE_DATABASE))
+			.db(process.env.PERSISTENCE_DATABASE)
+			.collection(collection)
+	}
+	await readModel.init(options);
+	if (process.env.REBUILD === '1') {
+		await readModel.clear();
+	}
+	await attachToReadModelAndCatchUp(readModel, shouldAbort);
+}
 
 module.exports.runManaged = runManaged;
 
 function factoryReadmodelNameWithVersion(readModel) {
-    return factoryNameWithVersion(readModel.constructor.name);
+	return factoryNameWithVersion(readModel.constructor.name);
 }
 
 function factoryNameWithVersion(name) {
-    return `${name}_${process.env.VERSION.replace(/\./g, '_')}_${process.env.BUILD}`;
+	return `${name}_${process.env.VERSION.replace(/\./g, '_')}_${process.env.BUILD}`;
 }
 
 function getDsn(serverName) {
-    let secret = fs.readFileSync(`/run/secrets/db-${serverName}`);
-    console.log('secret', serverName, `${secret}`)
-    return `${secret}`.match(/^mongodb:\/\//) ? secret : `mongodb://${secret}`;
+	let secret = fs.readFileSync(`/run/secrets/db-${serverName}`);
+	console.log('secret', serverName, `${secret}`)
+	return `${secret}`.match(/^mongodb:\/\//) ? secret : `mongodb://${secret}`;
 }

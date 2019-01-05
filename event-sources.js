@@ -13,7 +13,7 @@ async function fetchEventSources(){
     });
 }
 
-module.exports.attachToReadModelAndCatchUp = async function(readModel){
+module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbort){
     const eventSources = await getRelevantEventSourcesFromReadModel(readModel);
     const eventStores = getEventStores(eventSources);
     const eventLogs = getEventLogs(eventSources);
@@ -26,7 +26,7 @@ module.exports.attachToReadModelAndCatchUp = async function(readModel){
         console.log(`subscribing to`, eventSource.name);
         return eventSource
             .subscribeReadModel(readModel)
-            .run();
+            .run(shouldAbort);
     }));
 
     function eventSourceToDto(eventStore){

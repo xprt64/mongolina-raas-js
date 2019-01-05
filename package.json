@@ -11,7 +11,7 @@
   "dependencies": {
     "request": "^2.88.0",
     "request-promise": "^4.2.2",
-    "mongolina": "0.0.23",
+    "mongolina": "^0.0.25",
     "express": "^4.16.4"
   }
 }
