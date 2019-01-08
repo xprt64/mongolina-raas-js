@@ -13,7 +13,7 @@ async function fetchEventSources(){
     });
 }
 
-module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbort){
+module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbort, raportStats){
     const eventSources = await getRelevantEventSourcesFromReadModel(readModel);
     const eventStores = getEventStores(eventSources);
     const eventLogs = getEventLogs(eventSources);
@@ -24,6 +24,7 @@ module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbo
 
     await Promise.all(connections.map(eventSource => {
         console.log(`subscribing to`, eventSource.name);
+        raportStats(eventSource.name, () => eventSource.countEvents);
         return eventSource
             .subscribeReadModel(readModel)
             .run(shouldAbort);
