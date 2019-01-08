@@ -9,7 +9,7 @@ app.use(express.urlencoded({extended: false}));
 app.set('port', port);
 var router = express.Router();
 
-module.exports.init = async function (onDelete, areWeTailingEvents, countEvents) {
+module.exports.init = async function (onDelete, areWeTailingEvents, countEvents, ownedQuestionTypesCallback) {
 	router.delete('/', async function (req, res, next) {
 		try {
 			let s = await onDelete();
@@ -32,6 +32,13 @@ module.exports.init = async function (onDelete, areWeTailingEvents, countEvents)
 	router.get('/tail-stats', async function (req, res, next) {
 		try {
 			res.send(countEvents());
+		} catch (e) {
+			next(e);
+		}
+	});
+	router.get('/owned-questions', async function (req, res, next) {
+		try {
+			res.send(ownedQuestionTypesCallback());
 		} catch (e) {
 			next(e);
 		}

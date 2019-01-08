@@ -1,8 +1,8 @@
-const hub = require('hub');
+const hub = require('./query-hub');
 
 module.exports = class {
     async answerQuestion(questionType, questionPayload){
-
+        await hub.answerQuestion(questionType, questionPayload)
     }
 
     providesAnswersTo(questions){
@@ -11,6 +11,6 @@ module.exports = class {
 
     async askQuestion(questionType, questionPayload, whoNeedsToKnow){
         const answer = await hub.askQuestion(questionType, questionPayload);
-        whoNeedsToKnow.answerer.whenAnswered(questionType, questionPayload, answer);
+        whoNeedsToKnow.getNeededQuestions()[questionType](questionPayload, answer);
     }
 };

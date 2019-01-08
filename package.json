@@ -1,6 +1,6 @@
 {
   "name": "mongolina-raas-js",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "ReadModel As A Service",
   "main": "index.js",
   "scripts": {
@@ -11,7 +11,7 @@
   "dependencies": {
     "request": "^2.88.0",
     "request-promise": "^4.2.2",
-    "mongolina": "^0.0.25",
+    "mongolina": "^0.0.30",
     "express": "^4.16.4"
   }
 }

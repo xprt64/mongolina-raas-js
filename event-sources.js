@@ -13,8 +13,8 @@ async function fetchEventSources(){
     });
 }
 
-module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbort, raportStats){
-    const eventSources = await getRelevantEventSourcesFromReadModel(readModel);
+module.exports.attachToReadModelAndCatchUp = async function(readmodelUpdater, shouldAbort, raportStats){
+    const eventSources = await getRelevantEventSourcesFromReadModel(readmodelUpdater);
     const eventStores = getEventStores(eventSources);
     const eventLogs = getEventLogs(eventSources);
 
@@ -26,7 +26,7 @@ module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbo
         console.log(`subscribing to`, eventSource.name);
         raportStats(eventSource.name, () => eventSource.countEvents);
         return eventSource
-            .subscribeReadModel(readModel)
+            .subscribeReadModel(readmodelUpdater)
             .run(shouldAbort);
     }));
 
@@ -42,8 +42,8 @@ module.exports.attachToReadModelAndCatchUp = async function(readModel, shouldAbo
 };
 
 
-async function getRelevantEventSourcesFromReadModel(readModel) {
-    const eventTypes = readModel.getEventTypes();
+async function getRelevantEventSourcesFromReadModel(readModelUpdater) {
+    const eventTypes = readModelUpdater.getEventTypes();
     const eventSources = await fetchEventSources();
     return eventSources.filter((eventSource) => arrayIntersects(eventSource.events, eventTypes));
 }
