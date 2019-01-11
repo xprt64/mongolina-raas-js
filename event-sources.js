@@ -24,7 +24,7 @@ module.exports.attachToReadModelAndCatchUp = async function(readmodelUpdater, sh
 
     await Promise.all(connections.map(eventSource => {
         console.log(`subscribing to`, eventSource.name);
-        raportStats(eventSource.name, () => eventSource.countEvents);
+        raportStats(eventSource.name, () => ({processed: eventSource.countEvents, total: eventSource.totalEventCount}));
         return eventSource
             .subscribeReadModel(readmodelUpdater)
             .run(shouldAbort);

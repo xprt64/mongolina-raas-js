@@ -8,22 +8,71 @@ const {connect} = require('./mongo');
 const {attachToReadModelAndCatchUp} = require('./event-sources');
 const {tellWeCatchedUp} = require('./supervizer-api');
 const Answerer = require('./answerer');
-const frontendInit = require('./supervizer-frontend').init;
 const eventCounters = [];
-let ownedQuestionTypes;
+let ownedQuestionTypes, queryExecutor;
+
+async function runManagedQuery(readModel) {
+    const frontendInit = require('./query-frontend').init;
+	try {
+        const options = {};
+        const readmodelInitOptionsNeeds = readModel.getInitOptions();
+        if (readmodelInitOptionsNeeds.getDatabase) {
+            if (!process.env.PERSISTENCE_SERVER) {
+                throw "process.env.PERSISTENCE_SERVER is missing";
+            }
+            let db = factoryReadmodelNameWithVersion(readModel);
+            console.log(`using managed database ${process.env.PERSISTENCE_SERVER}`);
+            options.getDatabase = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + db))
+                .db(db)
+        }
+        if (readmodelInitOptionsNeeds.getCollection) {
+            if (!process.env.PERSISTENCE_SERVER) {
+                throw "process.env.PERSISTENCE_SERVER is missing";
+            }
+            if (!process.env.PERSISTENCE_DATABASE) {
+                throw "process.env.PERSISTENCE_DATABASE is missing";
+            }
+            const collection = factoryNameWithVersion(process.env.PERSISTENCE_COLLECTION || readModel.constructor.name);
+            console.log(`using managed collection ${process.env.PERSISTENCE_SERVER}/${process.env.PERSISTENCE_DATABASE}/${collection}`);
+            options.getCollection = async () => (await connect(getDsn(process.env.PERSISTENCE_SERVER) + '/' + process.env.PERSISTENCE_DATABASE))
+                .db(process.env.PERSISTENCE_DATABASE)
+                .collection(collection)
+        }
+        const answerer = new Answerer;
+        await answerer.init(() => true);
+
+        if (readmodelInitOptionsNeeds.answerer) {
+            options.answerer = answerer;
+        }
+        await readModel.init(options);
+        await frontendInit(
+			(questionType, questionPayload) => answerer.askReadmodel(readModel, questionType, questionPayload)
+        );
+
+ 		console.log(`running managed query ${readModel.constructor.name}`);
+	} catch (e) {
+		console.error(e);
+		process.exit(1);
+	}
+}
+module.exports.runManagedQuery = runManagedQuery;
 
 async function runManaged(readModel) {
+    const frontendInit = require('./supervizer-frontend').init;
 	try {
 		let tailing = false;
 		let cleared = false;
-		await frontendInit(
+        const answerer = new Answerer;
+        await frontendInit(
 			async () => {
 				cleared = true;
 				return await readModel.clear()
 			},
 			() => tailing,
 			countEvents,
-			() => ownedQuestionTypes
+			async (questionType, questionPayload, answer) => {
+                await answerer.applyAnsweredQuestionToReadModel(questionType, questionPayload, answer, readModel)
+            }
 		);
 		if (cleared) {
 			return;
@@ -47,6 +96,7 @@ async function runManaged(readModel) {
 async function __runManaged(readModel, shouldAbort, raportStats, getOwnedQuestionTypesCallback) {
 	const options = {};
 	const readmodelInitOptionsNeeds = readModel.getInitOptions();
+	let isTailing = false;
 	if (readmodelInitOptionsNeeds.getDatabase) {
 		if (!process.env.PERSISTENCE_SERVER) {
 			throw "process.env.PERSISTENCE_SERVER is missing";
@@ -70,13 +120,15 @@ async function __runManaged(readModel, shouldAbort, raportStats, getOwnedQuestio
 			.collection(collection)
 	}
 	const answerer = new Answerer;
+	await answerer.init( () => isTailing);
+
 	if (readmodelInitOptionsNeeds.answerer) {
 		options.answerer = answerer;
 	}
 	if ('getOwnedQuestions' in readModel) {
 		const ownedQuestions = readModel.getOwnedQuestions();
 		answerer.providesAnswersTo(ownedQuestions);
-		getOwnedQuestionTypesCallback(Object.getOwnPropertyNames(ownedQuestions))
+		getOwnedQuestionTypesCallback(Object.getOwnPropertyNames(ownedQuestions));
 	}
 
 	const readmodelUpdater = new ReadModelUpdater({
@@ -87,6 +139,7 @@ async function __runManaged(readModel, shouldAbort, raportStats, getOwnedQuestio
 		await readModel.clear();
 	}
 	await attachToReadModelAndCatchUp(readmodelUpdater, shouldAbort, raportStats);
+    isTailing  = true;
 }
 
 module.exports.runManaged = runManaged;
