@@ -3,7 +3,7 @@ const request = require('request-promise');
 const startListeningUdpChanges = require('./query-hub-udp-listener').start;
 const {fromSeconds, fromMinutes} = require('./lib/time');
 const QUERY_TIMEOUT = fromSeconds(5);
-const {questionIsOnArray} = require('./lib/questions');
+const {questionIsOnArrayAndPrecedes, questionIsOnArrayAndFollows} = require('./lib/questions');
 
 module.exports = class QueryHub {
     async init(isPushingEnabled) {
@@ -55,7 +55,7 @@ module.exports = class QueryHub {
         return answer;
     }
 
-    async answerQuestion(questionType, questionPayload, answer) {
+    async pushQuestion(questionType, questionPayload, answer) {
         if (!this.isPushingEnabled()) {
             console.log(`HUB: push question NOT ENABLED`, questionType, questionPayload);
             return;
@@ -77,11 +77,11 @@ module.exports = class QueryHub {
     }
 
     resolveRespondersForQuestion(questionType) {
-        return this.hubState.filter(hubItem => questionIsOnArray(questionType,  hubItem.state.ownedQuestions));
+        return this.hubState.filter(hubItem => questionIsOnArrayAndPrecedes(questionType,  hubItem.state.ownedQuestions));
     }
 
     resolveNeedersForQuestion(questionType) {
-        return this.hubState.filter(hubItem => questionIsOnArray( questionType, hubItem.state.neededQuestions));
+        return this.hubState.filter(hubItem => questionIsOnArrayAndFollows( questionType, hubItem.state.neededQuestions));
     }
 };
 
